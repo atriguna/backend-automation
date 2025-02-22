@@ -1,0 +1,47 @@
+
+        <html>
+          <body>
+            <h1>Automation Report</h1>
+            <p>URL: https://app.bugbug.io/sign-in/</p>
+            
+              <div>
+                <p><strong>Step 1:</strong> fill - //input[@name='email'] - 
+                <span style="color: green;">sukses</span></p>
+                
+                <img src="http://localhost:3004/screenshots/07e235a5-a3bd-4686-b008-832fcc57d6e6/step-1.png" width="300" />
+              </div>
+            
+              <div>
+                <p><strong>Step 2:</strong> fill - //input[@name='password'] - 
+                <span style="color: green;">sukses</span></p>
+                
+                <img src="http://localhost:3004/screenshots/07e235a5-a3bd-4686-b008-832fcc57d6e6/step-2.png" width="300" />
+              </div>
+            
+              <div>
+                <p><strong>Step 3:</strong> click - (//button[@data-testid='Button'])[1] - 
+                <span style="color: green;">sukses</span></p>
+                
+                <img src="http://localhost:3004/screenshots/07e235a5-a3bd-4686-b008-832fcc57d6e6/step-3.png" width="300" />
+              </div>
+            
+              <div>
+                <p><strong>Step 4:</strong> validate - "//*[contains(text(),'Min 8 characters')]" - 
+                <span style="color: red;">gagal</span></p>
+                <p style="color: red;">Error: locator.textContent: TypeError: Failed to execute 'evaluate' on 'Document': The result is not a node set, and therefore cannot be converted to the desired type.
+    at Object.queryAll (<anonymous>:41:25)
+    at InjectedScript._queryEngineAll (<anonymous>:5916:49)
+    at InjectedScript.querySelectorAll (<anonymous>:5903:30)
+    at InjectedScript.querySelector (<anonymous>:5821:25)
+    at eval (eval at evaluate (:234:30), <anonymous>:9:36)
+    at UtilityScript.evaluate (<anonymous>:236:17)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+Call log:
+[2m  - waiting for locator('xpath="//*[contains(text(),\'Min 8 characters\')]"')[22m
+</p>
+                <img src="http://localhost:3004/screenshots/07e235a5-a3bd-4686-b008-832fcc57d6e6/step-4-error.png" width="300" />
+              </div>
+            
+          </body>
+        </html>
+      

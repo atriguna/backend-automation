@@ -9,7 +9,7 @@ import path from "path";
 const app = express();
 const PORT = process.env.PORT || 3004;
 const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
-
+const railway_url = "https://backend-automation-production-badd.up.railway.app"
 // ✅ Middleware
 app.use(express.json());
 app.use(cors());
@@ -113,7 +113,7 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
             xpath,
             value,
             status: "sukses",
-            screenshotUrl: `${SERVER_URL}/screenshots/${sessionId}/step-${i + 1}.png`,
+            screenshotUrl: `${railway_url}/screenshots/${sessionId}/step-${i + 1}.png`,
           });
         } catch (stepError: unknown) {
           const errorMessage = stepError instanceof Error ? stepError.message : "Unknown error";
@@ -128,7 +128,7 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
             value,
             status: "gagal",
             error: errorMessage,
-            screenshotUrl: `${SERVER_URL}/screenshots/${sessionId}/step-${i + 1}-error.png`,
+            screenshotUrl: `${railway_url}/screenshots/${sessionId}/step-${i + 1}-error.png`,
           });
         }
       }
@@ -163,7 +163,7 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
       res.json({
         status: "success",
         message: "Automation completed!",
-        reportUrl: `${SERVER_URL}/screenshots/${sessionId}/result.html`,
+        reportUrl: `${railway_url}/screenshots/${sessionId}/result.html`,
         stepResults,
       });
     } finally {
