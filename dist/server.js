@@ -7,15 +7,19 @@ import path from "path";
 // ✅ Setup Express
 const app = express();
 const PORT = process.env.PORT || 3004;
+const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
 // ✅ Middleware
 app.use(express.json());
 app.use(cors());
-// ✅ Folder untuk menyimpan hasil screenshot (gunakan `/tmp/` untuk Railway)
-const SCREENSHOT_DIR = path.join("/tmp/screenshots");
-// ✅ Pastikan `/tmp/screenshots` tersedia
+// ✅ Folder untuk menyimpan hasil screenshot
+const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
+// ✅ Pastikan folder `/screenshots` tersedia
 if (!fs.existsSync(SCREENSHOT_DIR)) {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 }
+// ✅ Middleware untuk menyajikan file screenshot secara public
+app.use("/screenshots", express.static(SCREENSHOT_DIR));
+console.log(`🖼️ Static files served from: ${SCREENSHOT_DIR}`);
 // ✅ API Endpoint untuk menjalankan automation
 app.post("/api/run-automation", async (req, res) => {
     try {
@@ -62,34 +66,60 @@ app.post("/api/run-automation", async (req, res) => {
                         default:
                             throw new Error(`Unknown action: ${action}`);
                     }
+                    // ✅ Simpan screenshot
                     const screenshotPath = path.join(folderPath, `step-${i + 1}.png`);
                     await page.screenshot({ path: screenshotPath });
+                    console.log(`✅ Screenshot berhasil disimpan: ${screenshotPath}`);
                     stepResults.push({
                         action,
                         xpath,
                         value,
                         status: "sukses",
-                        screenshotUrl: `/screenshots/${sessionId}/step-${i + 1}.png`,
+                        screenshotUrl: `${SERVER_URL}/screenshots/${sessionId}/step-${i + 1}.png`,
                     });
                 }
                 catch (stepError) {
                     const errorMessage = stepError instanceof Error ? stepError.message : "Unknown error";
                     const screenshotPath = path.join(folderPath, `step-${i + 1}-error.png`);
                     await page.screenshot({ path: screenshotPath });
+                    console.log(`❌ Error pada step ${i + 1}: ${errorMessage}`);
                     stepResults.push({
                         action,
                         xpath,
                         value,
                         status: "gagal",
                         error: errorMessage,
-                        screenshotUrl: `/screenshots/${sessionId}/step-${i + 1}-error.png`,
+                        screenshotUrl: `${SERVER_URL}/screenshots/${sessionId}/step-${i + 1}-error.png`,
                     });
                 }
             }
+            // ✅ Simpan result.html untuk laporan
+            const resultHtml = `
+        <html>
+          <body>
+            <h1>Automation Report</h1>
+            <p>URL: ${url}</p>
+            ${stepResults
+                .map((step, index) => `
+              <div>
+                <p><strong>Step ${index + 1}:</strong> ${step.action} - ${step.xpath} - 
+                <span style="color: ${step.status === "sukses" ? "green" : "red"};">${step.status}</span></p>
+                ${step.error ? `<p style="color: red;">Error: ${step.error}</p>` : ""}
+                <img src="${step.screenshotUrl}" width="300" />
+              </div>
+            `)
+                .join("")}
+          </body>
+        </html>
+      `;
+            // ✅ Pastikan file benar-benar tersimpan
+            const resultPath = path.join(folderPath, "result.html");
+            fs.writeFileSync(resultPath, resultHtml);
+            console.log(`📄 Report saved: ${resultPath}`);
             res.json({
                 status: "success",
                 message: "Automation completed!",
-                reportUrl: `/screenshots/${sessionId}/result.html`,
+                reportUrl: `${SERVER_URL}/screenshots/${sessionId}/result.html`,
                 stepResults,
             });
         }
@@ -104,5 +134,5 @@ app.post("/api/run-automation", async (req, res) => {
 });
 // ✅ Jalankan server di Railway
 app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
+    console.log(`🚀 Server running at ${SERVER_URL}`);
 });

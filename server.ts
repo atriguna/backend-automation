@@ -4,33 +4,28 @@ import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
-
-// ✅ Load environment variables
-dotenv.config();
 
 // ✅ Setup Express
 const app = express();
 const PORT = process.env.PORT || 3004;
 const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
 
-// ✅ Folder untuk menyimpan hasil screenshot
-const SCREENSHOT_DIR = process.env.NODE_ENV === "production"
-  ? path.join("/tmp/screenshots")
-  : path.join(process.cwd(), "public/screenshots");
-
-// ✅ Pastikan folder tersedia
-if (!fs.existsSync(SCREENSHOT_DIR)) {
-  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
-  console.log(`📂 Folder screenshot dibuat di: ${SCREENSHOT_DIR}`);
-}
-
 // ✅ Middleware
 app.use(express.json());
 app.use(cors());
-app.use("/screenshots", express.static(SCREENSHOT_DIR)); // Sajikan file statis
 
-console.log(`🖼️ Screenshots disajikan dari: ${SCREENSHOT_DIR}`);
+// ✅ Folder untuk menyimpan hasil screenshot
+const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
+
+// ✅ Pastikan folder `/screenshots` tersedia
+if (!fs.existsSync(SCREENSHOT_DIR)) {
+  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+}
+
+// ✅ Middleware untuk menyajikan file screenshot secara public
+app.use("/screenshots", express.static(SCREENSHOT_DIR));
+
+console.log(`🖼️ Static files served from: ${SCREENSHOT_DIR}`);
 
 // ✅ Tipe data untuk langkah automation
 interface Step {
@@ -69,8 +64,6 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
       fs.mkdirSync(folderPath, { recursive: true });
     }
 
-    console.log(`📂 Folder session ${sessionId} dibuat di: ${folderPath}`);
-
     const browser = await chromium.launch({ headless });
     const page = await browser.newPage();
     const stepResults: AutomationResponse["stepResults"] = [];
@@ -83,34 +76,27 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
         const { action, xpath, value } = steps[i];
 
         try {
-          const locator = page.locator(`xpath=${xpath}`);
-
           switch (action) {
             case "click":
-              await page.waitForSelector(`xpath=${xpath}`, { timeout: 5000 });
-              await locator.click();
+              await page.locator(`xpath=${xpath}`).click();
               break;
             case "fill":
-              await page.waitForSelector(`xpath=${xpath}`, { timeout: 5000 });
-              await locator.fill(value || "");
+              await page.locator(`xpath=${xpath}`).fill(value || "");
               break;
             case "wait":
               await page.waitForSelector(`xpath=${xpath}`, { timeout: parseInt(value || "5000") });
               break;
             case "validate":
-              await page.waitForSelector(`xpath=${xpath}`, { timeout: 5000 });
-              await locator.textContent();
+              await page.locator(`xpath=${xpath}`).textContent();
               break;
             case "assert-url":
               await page.waitForURL(value || "");
               break;
             case "select":
-              await page.waitForSelector(`xpath=${xpath}`, { timeout: 5000 });
-              await locator.selectOption({ label: value || "" });
+              await page.locator(`xpath=${xpath}`).selectOption({ label: value || "" });
               break;
             case "scroll":
-              await page.waitForSelector(`xpath=${xpath}`, { timeout: 5000 });
-              await locator.scrollIntoViewIfNeeded();
+              await page.locator(`xpath=${xpath}`).scrollIntoViewIfNeeded();
               break;
             default:
               throw new Error(`Unknown action: ${action}`);
@@ -147,7 +133,33 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
         }
       }
 
-      // ✅ Kirim response dengan URL hasil screenshot
+      // ✅ Simpan result.html untuk laporan
+      const resultHtml = `
+        <html>
+          <body>
+            <h1>Automation Report</h1>
+            <p>URL: ${url}</p>
+            ${stepResults
+              .map(
+                (step, index) => `
+              <div>
+                <p><strong>Step ${index + 1}:</strong> ${step.action} - ${step.xpath} - 
+                <span style="color: ${step.status === "sukses" ? "green" : "red"};">${step.status}</span></p>
+                ${step.error ? `<p style="color: red;">Error: ${step.error}</p>` : ""}
+                <img src="${step.screenshotUrl}" width="300" />
+              </div>
+            `
+              )
+              .join("")}
+          </body>
+        </html>
+      `;
+
+      // ✅ Pastikan file benar-benar tersimpan
+      const resultPath = path.join(folderPath, "result.html");
+      fs.writeFileSync(resultPath, resultHtml);
+      console.log(`📄 Report saved: ${resultPath}`);
+
       res.json({
         status: "success",
         message: "Automation completed!",
