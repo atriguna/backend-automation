@@ -8,9 +8,18 @@ import path from "path";
 const app = express();
 const PORT = process.env.PORT || 3004;
 const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
+const railway_url = "https://backend-automation-production-badd.up.railway.app";
 // ✅ Middleware
+const allowedOrigins = [
+    "http://localhost:3001", // Kalau pakai frontend di lokal
+    "https://automation-tools-drab.vercel.app", // Domain frontend di Vercel
+];
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+}));
 // ✅ Folder untuk menyimpan hasil screenshot
 const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
 // ✅ Pastikan folder `/screenshots` tersedia
@@ -75,7 +84,7 @@ app.post("/api/run-automation", async (req, res) => {
                         xpath,
                         value,
                         status: "sukses",
-                        screenshotUrl: `${SERVER_URL}/screenshots/${sessionId}/step-${i + 1}.png`,
+                        screenshotUrl: `${railway_url}/screenshots/${sessionId}/step-${i + 1}.png`,
                     });
                 }
                 catch (stepError) {
@@ -89,7 +98,7 @@ app.post("/api/run-automation", async (req, res) => {
                         value,
                         status: "gagal",
                         error: errorMessage,
-                        screenshotUrl: `${SERVER_URL}/screenshots/${sessionId}/step-${i + 1}-error.png`,
+                        screenshotUrl: `${railway_url}/screenshots/${sessionId}/step-${i + 1}-error.png`,
                     });
                 }
             }
@@ -119,7 +128,7 @@ app.post("/api/run-automation", async (req, res) => {
             res.json({
                 status: "success",
                 message: "Automation completed!",
-                reportUrl: `${SERVER_URL}/screenshots/${sessionId}/result.html`,
+                reportUrl: `${railway_url}/screenshots/${sessionId}/result.html`,
                 stepResults,
             });
         }

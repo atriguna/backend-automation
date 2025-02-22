@@ -5,14 +5,23 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 
+
 // ✅ Setup Express
 const app = express();
 const PORT = process.env.PORT || 3004;
 const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
 const railway_url = "https://backend-automation-production-badd.up.railway.app"
 // ✅ Middleware
+const allowedOrigins = [
+  "http://localhost:3001", // Kalau pakai frontend di lokal
+  "https://automation-tools-drab.vercel.app", // Domain frontend di Vercel
+];
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"],
+}));
 
 // ✅ Folder untuk menyimpan hasil screenshot
 const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
