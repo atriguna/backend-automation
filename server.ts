@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(cors());
 
 // ✅ Folder untuk menyimpan hasil screenshot (gunakan `/tmp/` untuk Railway)
-const SCREENSHOT_DIR = path.join("/tmp/screenshots");
+const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
 
 // ✅ Pastikan `/tmp/screenshots` tersedia
 if (!fs.existsSync(SCREENSHOT_DIR)) {
