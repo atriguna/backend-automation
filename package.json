@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only server.ts",
-    "postinstall": "playwright install --with-deps"
+    "postinstall": "playwright install"
   },
   "dependencies": {
     "@playwright/test": "^1.50.1",
