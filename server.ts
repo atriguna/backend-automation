@@ -65,15 +65,21 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
     const folderPath = path.join(SCREENSHOT_DIR, sessionId);
     fs.mkdirSync(folderPath, { recursive: true });
 
-    const browser = await playwrightChromium.launch({ headless });
-    const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 800 },
-    });
+    const browser = await playwrightChromium.launch({ 
+      headless,
+      args: [
+        '--no-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+      ], });
+      const context = await browser.newContext({
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+        viewport: { width: 1366, height: 768 },
+        timezoneId: "Asia/Jakarta",
+        locale: "en-US",
+      });
     const page = await context.newPage();
-    const stepResults: AutomationResponse["stepResults"] = [];
-
     // ✅ Manual stealth anti-fingerprint
     await page.addInitScript(() => {
       (window as any).chrome = { runtime: {} };
@@ -97,10 +103,11 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
 
     });
     
+    const stepResults: AutomationResponse["stepResults"] = [];
 
     try {
       await page.goto(url, { timeout: 30000 });
-      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(5000)
 
       for (let i = 0; i < steps.length; i++) {
         const { action, xpath, value } = steps[i];
