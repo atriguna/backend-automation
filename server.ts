@@ -4,6 +4,10 @@ import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
+import { chromium as playwrightChromium } from "playwright-extra";
+import stealth from "playwright-extra-plugin-stealth";
+
+
 
 
 // ✅ Setup Express
@@ -72,8 +76,14 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath, { recursive: true });
     }
-
-    const browser = await chromium.launch({ headless });
+    // Aktifkan stealth plugin
+    playwrightChromium.use(stealth());
+    const browser = await playwrightChromium.launch({ headless });
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 800 },
+    });
     const page = await browser.newPage();
     const stepResults: AutomationResponse["stepResults"] = [];
 

@@ -6,8 +6,9 @@
     "target": "ESNext",
     "strict": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": ["server.ts"],
+  "include": ["server.ts", "types"],
   "exclude": ["node_modules"]
 }
