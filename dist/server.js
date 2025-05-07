@@ -1,51 +1,73 @@
-import express from "express";
-import { chromium } from "playwright";
-import { v4 as uuidv4 } from "uuid";
-import cors from "cors";
-import fs from "fs";
-import path from "path";
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const playwright_extra_1 = require("playwright-extra");
+const uuid_1 = require("uuid");
+const cors_1 = __importDefault(require("cors"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 // ✅ Setup Express
-const app = express();
+const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3004;
 const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
 const railway_url = "https://backend-automation-production-badd.up.railway.app";
 // ✅ Middleware
 const allowedOrigins = [
-    "http://localhost:3001", // Kalau pakai frontend di lokal
-    "https://automation-tools-drab.vercel.app", // Domain frontend di Vercel
+    "http://localhost:3001",
+    "https://automation-tools-drab.vercel.app",
 ];
-app.use(express.json());
-app.use(cors({
+app.use(express_1.default.json());
+app.use((0, cors_1.default)({
     origin: allowedOrigins,
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
 }));
-// ✅ Folder untuk menyimpan hasil screenshot
-const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
-// ✅ Pastikan folder `/screenshots` tersedia
-if (!fs.existsSync(SCREENSHOT_DIR)) {
-    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+// ✅ Folder screenshot
+const SCREENSHOT_DIR = path_1.default.join(process.cwd(), "public/screenshots");
+if (!fs_1.default.existsSync(SCREENSHOT_DIR)) {
+    fs_1.default.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 }
-// ✅ Middleware untuk menyajikan file screenshot secara public
-app.use("/screenshots", express.static(SCREENSHOT_DIR));
+app.use("/screenshots", express_1.default.static(SCREENSHOT_DIR));
 console.log(`🖼️ Static files served from: ${SCREENSHOT_DIR}`);
-// ✅ API Endpoint untuk menjalankan automation
+// ✅ API endpoint utama
 app.post("/api/run-automation", async (req, res) => {
     try {
         const { url, steps, headless } = req.body;
         if (!url || !steps) {
             return res.status(400).json({ status: "error", message: "Missing parameters" });
         }
-        const sessionId = uuidv4();
-        const folderPath = path.join(SCREENSHOT_DIR, sessionId);
-        if (!fs.existsSync(folderPath)) {
-            fs.mkdirSync(folderPath, { recursive: true });
-        }
-        const browser = await chromium.launch({ headless });
-        const page = await browser.newPage();
+        const sessionId = (0, uuid_1.v4)();
+        const folderPath = path_1.default.join(SCREENSHOT_DIR, sessionId);
+        fs_1.default.mkdirSync(folderPath, { recursive: true });
+        const browser = await playwright_extra_1.chromium.launch({ headless });
+        const context = await browser.newContext({
+            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+            viewport: { width: 1280, height: 800 },
+        });
+        const page = await context.newPage();
         const stepResults = [];
+        // ✅ Manual stealth anti-fingerprint
+        await page.addInitScript(() => {
+            window.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            const getContext = HTMLCanvasElement.prototype.getContext;
+            HTMLCanvasElement.prototype.getContext = function (...args) {
+                const context = getContext.apply(this, args);
+                if (args[0] === '2d' && context) {
+                    context.getImageData = function () {
+                        throw new Error('Blocked for anti-fingerprint');
+                    };
+                }
+                return context;
+            };
+        });
         try {
-            await page.goto(url);
+            await page.goto(url, { timeout: 30000 });
             await page.waitForLoadState("networkidle");
             for (let i = 0; i < steps.length; i++) {
                 const { action, xpath, value } = steps[i];
@@ -75,10 +97,8 @@ app.post("/api/run-automation", async (req, res) => {
                         default:
                             throw new Error(`Unknown action: ${action}`);
                     }
-                    // ✅ Simpan screenshot
-                    const screenshotPath = path.join(folderPath, `step-${i + 1}.png`);
+                    const screenshotPath = path_1.default.join(folderPath, `step-${i + 1}.png`);
                     await page.screenshot({ path: screenshotPath });
-                    console.log(`✅ Screenshot berhasil disimpan: ${screenshotPath}`);
                     stepResults.push({
                         action,
                         xpath,
@@ -88,10 +108,9 @@ app.post("/api/run-automation", async (req, res) => {
                     });
                 }
                 catch (stepError) {
-                    const errorMessage = stepError instanceof Error ? stepError.message : "Unknown error";
-                    const screenshotPath = path.join(folderPath, `step-${i + 1}-error.png`);
+                    const errorMessage = stepError?.message || "Unknown error";
+                    const screenshotPath = path_1.default.join(folderPath, `step-${i + 1}-error.png`);
                     await page.screenshot({ path: screenshotPath });
-                    console.log(`❌ Error pada step ${i + 1}: ${errorMessage}`);
                     stepResults.push({
                         action,
                         xpath,
@@ -102,7 +121,6 @@ app.post("/api/run-automation", async (req, res) => {
                     });
                 }
             }
-            // ✅ Simpan result.html untuk laporan
             const resultHtml = `
         <html>
           <body>
@@ -110,21 +128,18 @@ app.post("/api/run-automation", async (req, res) => {
             <p>URL: ${url}</p>
             ${stepResults
                 .map((step, index) => `
-              <div>
-                <p><strong>Step ${index + 1}:</strong> ${step.action} - ${step.xpath} - 
-                <span style="color: ${step.status === "sukses" ? "green" : "red"};">${step.status}</span></p>
-                ${step.error ? `<p style="color: red;">Error: ${step.error}</p>` : ""}
-                <img src="${step.screenshotUrl}" width="300" />
-              </div>
-            `)
+                <div>
+                  <p><strong>Step ${index + 1}:</strong> ${step.action} - ${step.xpath} - 
+                  <span style="color: ${step.status === "sukses" ? "green" : "red"};">${step.status}</span></p>
+                  ${step.error ? `<p style="color: red;">Error: ${step.error}</p>` : ""}
+                  <img src="${step.screenshotUrl}" width="300" />
+                </div>
+              `)
                 .join("")}
           </body>
         </html>
       `;
-            // ✅ Pastikan file benar-benar tersimpan
-            const resultPath = path.join(folderPath, "result.html");
-            fs.writeFileSync(resultPath, resultHtml);
-            console.log(`📄 Report saved: ${resultPath}`);
+            fs_1.default.writeFileSync(path_1.default.join(folderPath, "result.html"), resultHtml);
             res.json({
                 status: "success",
                 message: "Automation completed!",
@@ -136,12 +151,11 @@ app.post("/api/run-automation", async (req, res) => {
             await browser.close();
         }
     }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        res.status(500).json({ status: "error", message: errorMessage });
+    catch (err) {
+        res.status(500).json({ status: "error", message: err.message });
     }
 });
-// ✅ Jalankan server di Railway
+// ✅ Run server
 app.listen(PORT, () => {
     console.log(`🚀 Server running at ${SERVER_URL}`);
 });

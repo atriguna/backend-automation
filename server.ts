@@ -1,24 +1,20 @@
 import express, { Request, Response } from "express";
-import { chromium } from "playwright";
+import { chromium as playwrightChromium } from "playwright-extra";
 import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import { chromium as playwrightChromium } from "playwright-extra";
-import stealth from "playwright-extra-plugin-stealth";
-
-
-
 
 // ✅ Setup Express
 const app = express();
 const PORT = process.env.PORT || 3004;
 const SERVER_URL = process.env.SERVER_URL || `http://localhost:${PORT}`;
-const railway_url = "https://backend-automation-production-badd.up.railway.app"
+const railway_url = "https://backend-automation-production-badd.up.railway.app";
+
 // ✅ Middleware
 const allowedOrigins = [
-  "http://localhost:3001", // Kalau pakai frontend di lokal
-  "https://automation-tools-drab.vercel.app", // Domain frontend di Vercel
+  "http://localhost:3001",
+  "https://automation-tools-drab.vercel.app",
 ];
 app.use(express.json());
 app.use(cors({
@@ -27,20 +23,15 @@ app.use(cors({
   allowedHeaders: ["Content-Type"],
 }));
 
-// ✅ Folder untuk menyimpan hasil screenshot
+// ✅ Folder screenshot
 const SCREENSHOT_DIR = path.join(process.cwd(), "public/screenshots");
-
-// ✅ Pastikan folder `/screenshots` tersedia
 if (!fs.existsSync(SCREENSHOT_DIR)) {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 }
-
-// ✅ Middleware untuk menyajikan file screenshot secara public
 app.use("/screenshots", express.static(SCREENSHOT_DIR));
-
 console.log(`🖼️ Static files served from: ${SCREENSHOT_DIR}`);
 
-// ✅ Tipe data untuk langkah automation
+// ✅ Tipe step automation
 interface Step {
   action: string;
   xpath: string;
@@ -61,7 +52,7 @@ interface AutomationResponse {
   }[];
 }
 
-// ✅ API Endpoint untuk menjalankan automation
+// ✅ API endpoint utama
 app.post("/api/run-automation", async (req: Request, res: Response) => {
   try {
     const { url, steps, headless }: { url: string; steps: Step[]; headless: boolean } = req.body;
@@ -72,23 +63,43 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
 
     const sessionId = uuidv4();
     const folderPath = path.join(SCREENSHOT_DIR, sessionId);
+    fs.mkdirSync(folderPath, { recursive: true });
 
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
-    }
-    // Aktifkan stealth plugin
-    playwrightChromium.use(stealth());
     const browser = await playwrightChromium.launch({ headless });
     const context = await browser.newContext({
       userAgent:
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
       viewport: { width: 1280, height: 800 },
     });
-    const page = await browser.newPage();
+    const page = await context.newPage();
     const stepResults: AutomationResponse["stepResults"] = [];
 
+    // ✅ Manual stealth anti-fingerprint
+    await page.addInitScript(() => {
+      (window as any).chrome = { runtime: {} };
+    
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+    
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (...args): any {
+        const context = getContext.apply(this, args) as CanvasRenderingContext2D | null;
+
+        if (args[0] === '2d' && context) {
+          context.getImageData = function () {
+            throw new Error('Blocked for anti-fingerprint');
+          };
+        }
+
+        return context;
+      };
+
+    });
+    
+
     try {
-      await page.goto(url);
+      await page.goto(url, { timeout: 30000 });
       await page.waitForLoadState("networkidle");
 
       for (let i = 0; i < steps.length; i++) {
@@ -121,11 +132,8 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
               throw new Error(`Unknown action: ${action}`);
           }
 
-          // ✅ Simpan screenshot
           const screenshotPath = path.join(folderPath, `step-${i + 1}.png`);
           await page.screenshot({ path: screenshotPath });
-
-          console.log(`✅ Screenshot berhasil disimpan: ${screenshotPath}`);
 
           stepResults.push({
             action,
@@ -134,12 +142,10 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
             status: "sukses",
             screenshotUrl: `${railway_url}/screenshots/${sessionId}/step-${i + 1}.png`,
           });
-        } catch (stepError: unknown) {
-          const errorMessage = stepError instanceof Error ? stepError.message : "Unknown error";
+        } catch (stepError: any) {
+          const errorMessage = stepError?.message || "Unknown error";
           const screenshotPath = path.join(folderPath, `step-${i + 1}-error.png`);
           await page.screenshot({ path: screenshotPath });
-
-          console.log(`❌ Error pada step ${i + 1}: ${errorMessage}`);
 
           stepResults.push({
             action,
@@ -152,32 +158,25 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
         }
       }
 
-      // ✅ Simpan result.html untuk laporan
       const resultHtml = `
         <html>
           <body>
             <h1>Automation Report</h1>
             <p>URL: ${url}</p>
             ${stepResults
-              .map(
-                (step, index) => `
-              <div>
-                <p><strong>Step ${index + 1}:</strong> ${step.action} - ${step.xpath} - 
-                <span style="color: ${step.status === "sukses" ? "green" : "red"};">${step.status}</span></p>
-                ${step.error ? `<p style="color: red;">Error: ${step.error}</p>` : ""}
-                <img src="${step.screenshotUrl}" width="300" />
-              </div>
-            `
-              )
+              .map((step, index) => `
+                <div>
+                  <p><strong>Step ${index + 1}:</strong> ${step.action} - ${step.xpath} - 
+                  <span style="color: ${step.status === "sukses" ? "green" : "red"};">${step.status}</span></p>
+                  ${step.error ? `<p style="color: red;">Error: ${step.error}</p>` : ""}
+                  <img src="${step.screenshotUrl}" width="300" />
+                </div>
+              `)
               .join("")}
           </body>
         </html>
       `;
-
-      // ✅ Pastikan file benar-benar tersimpan
-      const resultPath = path.join(folderPath, "result.html");
-      fs.writeFileSync(resultPath, resultHtml);
-      console.log(`📄 Report saved: ${resultPath}`);
+      fs.writeFileSync(path.join(folderPath, "result.html"), resultHtml);
 
       res.json({
         status: "success",
@@ -188,13 +187,12 @@ app.post("/api/run-automation", async (req: Request, res: Response) => {
     } finally {
       await browser.close();
     }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    res.status(500).json({ status: "error", message: errorMessage });
+  } catch (err: any) {
+    res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-// ✅ Jalankan server di Railway
+// ✅ Run server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at ${SERVER_URL}`);
 });
